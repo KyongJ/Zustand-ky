@@ -1,4 +1,5 @@
-import { create } from 'zustand';
+import { create } from "../zustand-ky";
+// import { create } from 'zustand';
 
 interface BearState {
     bears: number;

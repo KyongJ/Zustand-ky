@@ -1,19 +1,37 @@
 import { useSyncExternalStore } from 'react';
-import { createStore, StoreApi } from './vanlilla';
+import { createStore, creatorState, StoreApi } from './vanlilla';
+
+// 获取状态类型的工具类型
+type GetState<S> = S extends { getState: () => infer T } ? T : never;
+
+type ReadonlyStoreApi<T> = Pick<StoreApi<T>, 'getState' | 'getInitialState' | 'subscribe'>;
+
+export type UseBoundStore<S extends ReadonlyStoreApi<unknown>> = () => GetState<S>;
+
+// 创造函数类型定义
+type Creator = <T>(initializer: creatorState<T>) => UseBoundStore<StoreApi<T>>;
 
 //实现create函数，接受一个函数作为参数，函数的作用是创建仓库对象
-export const create = (createStateFn: unknown) => createStateImpl(createStateFn);
+export const create: Creator = <T>(createStateFn: creatorState<T>) =>
+    createStateImpl(createStateFn);
 
-const createStateImpl = (createStateFn: unknown) => {
+const createStateImpl = <T>(createStateFn: creatorState<T>) => {
     // 调用创建store方法
     const api = createStore(createStateFn);
 
     //创建一个自定义hook，供组件使用并返回
     const useBoundStore: any = () => useStore(api);
+
+    Object.assign(useBoundStore, api);
+
     return useBoundStore;
 };
 
-export function useStore<T>(api: StoreApi<T>) {
+// 函数重载
+export function useStore<S extends ReadonlyStoreApi<unknown>>(api: S): GetState<S>;
+
+// 实现
+export function useStore<T>(api: ReadonlyStoreApi<T>) {
     const slice = useSyncExternalStore(api.subscribe, api.getState);
     return slice;
 }

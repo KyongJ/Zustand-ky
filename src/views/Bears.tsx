@@ -1,9 +1,10 @@
-import { memo } from 'react';
+import { memo, useEffect } from 'react';
 import useBearStore from '../store/useBearStore';
 
 const Bears = () => {
     const bearsStore = useBearStore();
     const { bears, increase, decrease, reset } = bearsStore;
+    
     return (
         <div>
             <h3>BearsPage</h3>
@@ -16,9 +17,11 @@ const Bears = () => {
             <Child />
         </div>
     );
-}; 
+};
 const Child = memo(() => {
-    const bears = useBearStore(state => state.bears);
+    // const bears = useBearStore(state => state.bears);
+    const { bears } = useBearStore();
+
     return (
         <div>
             <h3>ChildPage</h3>

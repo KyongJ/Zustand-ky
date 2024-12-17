@@ -13,14 +13,28 @@ export interface StoreApi<T> {
     subscribe: (listener: Listener<T>) => () => void;
 }
 
+// 状态函数创造器类型
+export type creatorState<T> = (
+    setState: StoreApi<T>['setState'],
+    getState: StoreApi<T>['getState']
+) => T;
+
+// 状态仓库创造器类型
+export type creatorStoreImpl = <T>(initializer: creatorState<T>) => StoreApi<T>;
+
+export type creatorStore = {
+    <T>(initializer: creatorState<T>): StoreApi<T>;
+    <T>(): (initializer: creatorState<T>) => StoreApi<T>;
+};
+
 //创建状态仓库
-export const createStore: any = createStateFn => {
+export const createStoreImpl: creatorStoreImpl = createStateFn => {
     type TState = ReturnType<typeof createStateFn>;
 
     let state: TState;
     //定义监听器
     const listeners: Set<Listener<TState>> = new Set();
-    
+
     const setState: StoreApi<TState>['setState'] = (partial, replace) => {
         // 类型断言 防止编译出错
         const nextState =
@@ -54,3 +68,10 @@ export const createStore: any = createStateFn => {
 
     return api;
 };
+
+/**
+ * const createStoreFunction = createStore();
+   const store = createStoreFunction((set, get) => ({ count: 0 }));
+ */
+export const createStore = (createStateFn =>
+    createStateFn ? createStoreImpl(createStateFn) : createStoreImpl) as creatorStore;
