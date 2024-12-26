@@ -1,4 +1,4 @@
-import { useSyncExternalStore } from 'react';
+import { useEffect, useState, useSyncExternalStore } from 'react';
 import { createStore, creatorState, StoreApi } from './vanlilla';
 
 // 获取状态类型的工具类型
@@ -6,7 +6,10 @@ type GetState<S> = S extends { getState: () => infer T } ? T : never;
 
 type ReadonlyStoreApi<T> = Pick<StoreApi<T>, 'getState' | 'getInitialState' | 'subscribe'>;
 
-export type UseBoundStore<S extends ReadonlyStoreApi<unknown>> = () => GetState<S>;
+export type UseBoundStore<S extends ReadonlyStoreApi<unknown>> = {
+    (): GetState<S>;
+    <U>(selector: (state: GetState<S>) => U): U;
+} & S;
 
 // 创造函数类型定义
 type Creator = <T>(initializer: creatorState<T>) => UseBoundStore<StoreApi<T>>;
@@ -20,19 +23,32 @@ const createStateImpl = <T>(createStateFn: creatorState<T>) => {
     const api = createStore(createStateFn);
 
     //创建一个自定义hook，供组件使用并返回
-    const useBoundStore: any = () => useStore(api);
+    const useBoundStore: any = (selector?: any) => useStore(api, selector);
 
     Object.assign(useBoundStore, api);
 
     return useBoundStore;
 };
 
+//默认返回自身的函数
+const identity = <T>(arg: T): T => arg;
 // 函数重载
 export function useStore<S extends ReadonlyStoreApi<unknown>>(api: S): GetState<S>;
 
+export function useStore<S extends ReadonlyStoreApi<unknown>, U>(
+    api: S,
+    selector: (state: GetState<S>) => U
+): U;
 // 实现
-export function useStore<T>(api: ReadonlyStoreApi<T>) {
-    const slice = useSyncExternalStore(api.subscribe, api.getState);
+export function useStore<TState, StateSlice>(
+    api: ReadonlyStoreApi<TState>,
+    selector: (state: TState) => StateSlice = identity as any
+) {
+    const slice = useSyncExternalStore(
+        api.subscribe,
+        () => selector(api.getState()),
+        () => selector(api.getInitialState())
+    );
     return slice;
 }
 //
@@ -43,3 +59,34 @@ export function useStore<T>(api: ReadonlyStoreApi<T>) {
 // subscribe 函数会接收一个监听器（listener）作为参数，该监听器会在 store 状态发生变化时被调用。
 // 此时listener会被加入到listeners当中
 // 当状态发生变化时，lisntners会逐步遍历，从而通知组件，此时useSyncExternalStore 会获取最新的状态（通过 api.getState），并重新渲染组件。
+
+export function useCustomStore<TState, StateSlice>(
+    api: ReadonlyStoreApi<TState>,
+    selector: (state: TState) => StateSlice
+): StateSlice {
+    const [, forceRender] = useState(0);
+
+    useEffect(() => {
+        const handleChange = (state: TState, prevState: TState) => {
+            const newObj = selector(state);
+            const oldObj = selector(prevState);
+
+            if (newObj !== oldObj) {
+                forceRender(Math.random());
+            }
+        };
+
+        // 订阅状态变化
+        const unsubscribe = api.subscribe(handleChange);
+
+        // 立即调用 handleChange 以确保初始状态是正确的
+        handleChange(api.getState(), api.getInitialState());
+
+        // 返回一个清理函数，在组件卸载或依赖项变化时取消订阅
+        return () => {
+            unsubscribe();
+        };
+    }, [api, selector]); // 添加依赖项
+
+    return selector(api.getState());
+}
